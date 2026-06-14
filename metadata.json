@@ -1,0 +1,6 @@
+{
+  "name": "Générateur de Cartes Administratives",
+  "description": "Créateur et éditeur de cartes d'identité, permis, badges de sécurité et autres documents administratifs européens avec prévisualisation en temps réel et export PDF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
