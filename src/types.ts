@@ -94,6 +94,17 @@ export interface CustomText {
   bold: boolean;
 }
 
+export interface CustomImage {
+  id: string;
+  url: string;
+  x: number;
+  y: number;
+  width: number;
+  rotation: number;
+  opacity: number;
+  side: 'recto' | 'verso';
+}
+
 export interface PhotoConfig {
   url: string | null;
   zoom: number;
@@ -121,6 +132,7 @@ export interface CardProject {
   };
   positions: Record<string, DragItemPosition>;
   customTexts: CustomText[];
+  customImages?: CustomImage[];
   customColors?: {
     primary: string;
     secondary: string;

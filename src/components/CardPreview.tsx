@@ -4,7 +4,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { User, Layers, Move, Shield } from 'lucide-react';
+import { User, Layers, Move, Shield, Plus, Trash2, Upload } from 'lucide-react';
 import { CardProject, CardTemplate, DragItemPosition } from '../types';
 import { COUNTRY_LOGOS, generateTD1MRZ, SIGNATURE_FONTS } from '../templatesData';
 
@@ -15,6 +15,8 @@ interface CardPreviewProps {
   activeSide: 'recto' | 'verso'; // Recto or Verso toggle
   onUpdatePosition: (key: string, pos: DragItemPosition) => void;
   onUpdateCustomTextPosition: (id: string, x: number, y: number) => void;
+  onUpdateCustomImagePosition?: (id: string, x: number, y: number) => void;
+  onAddCustomImage?: (url: string, width?: number, extra?: { x: number; y: number; side: 'recto' | 'verso'; id?: string }) => void;
 }
 
 export default function CardPreview({
@@ -24,9 +26,11 @@ export default function CardPreview({
   activeSide,
   onUpdatePosition,
   onUpdateCustomTextPosition,
+  onUpdateCustomImagePosition,
+  onAddCustomImage,
 }: CardPreviewProps) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const [activeDragItem, setActiveDragItem] = useState<{ type: 'field' | 'custom' | 'system'; id: string } | null>(null);
+  const [activeDragItem, setActiveDragItem] = useState<{ type: 'field' | 'custom' | 'system' | 'customImage'; id: string } | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   // Get active country configuration or fallback
@@ -42,6 +46,66 @@ export default function CardPreview({
     project.fields.sexe || project.fields.sex || 'F',
     project.fields.date_expiration || '2030-02-11'
   );
+
+  // Generate French administration standard 2-Line MRZ for recto (Front side bottom)
+  const generateFrenchRecto2LineMRZ = () => {
+    const rawCountry = (project.countryCode || 'FR').toUpperCase();
+    const cCode = rawCountry === 'FR' ? 'FRA' : rawCountry.padEnd(3, '<').slice(0, 3);
+    
+    const rawNom = (project.fields.nom || project.fields.primer_apellido || 'MARTIN')
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^A-Z]/g, '')
+      .padEnd(25, '<')
+      .slice(0, 25);
+      
+    const rawDocNum = (project.fields.doc_num || project.fields.dni_num || project.fields.cc_num || '2F5189233')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '<')
+      .padEnd(9, '<')
+      .slice(0, 9);
+      
+    const calculateCheckDigit = (str: string) => {
+      const weights = [7, 3, 1];
+      let sum = 0;
+      for (let i = 0; i < str.length; i++) {
+        const c = str.charAt(i);
+        let val = 0;
+        if (c >= '0' && c <= '9') {
+          val = parseInt(c, 10);
+        } else if (c >= 'A' && c <= 'Z') {
+          val = c.charCodeAt(0) - 55;
+        }
+        sum += val * weights[i % 3];
+      }
+      return sum % 10;
+    };
+
+    const docCheck = calculateCheckDigit(rawDocNum);
+
+    let birthYYMMDD = '840612';
+    if (project.fields.date_naissance && project.fields.date_naissance.length >= 10) {
+      const d = project.fields.date_naissance;
+      birthYYMMDD = d.slice(2, 4) + d.slice(5, 7) + d.slice(8, 10);
+    }
+    const birthCheck = calculateCheckDigit(birthYYMMDD);
+
+    const rawPrenom = (project.fields.prenoms || 'JEAN FRANCOIS')
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^A-Z]/g, '<')
+      .padEnd(14, '<')
+      .slice(0, 14);
+
+    const sexChar = (project.fields.sexe || project.fields.sex || 'M').toUpperCase().charAt(0);
+
+    const line1 = `ID${cCode}${rawNom}${rawDocNum.slice(0, 6)}`.slice(0, 36);
+    const line2 = `${rawDocNum.slice(6)}${docCheck}${rawPrenom}${birthYYMMDD}${birthCheck}${sexChar}<<<<<<<`.slice(0, 36);
+
+    return [line1, line2];
+  };
 
   const renderLeftFlag = (code: string) => {
     switch (code) {
@@ -167,7 +231,7 @@ export default function CardPreview({
   // Mouse drag handler on Card
   const handleMouseDown = (
     e: React.MouseEvent,
-    type: 'field' | 'custom' | 'system',
+    type: 'field' | 'custom' | 'system' | 'customImage',
     id: string,
     currentPos: { x: number; y: number }
   ) => {
@@ -190,7 +254,7 @@ export default function CardPreview({
   // Touch support for mobile devices
   const handleTouchStart = (
     e: React.TouchEvent,
-    type: 'field' | 'custom' | 'system',
+    type: 'field' | 'custom' | 'system' | 'customImage',
     id: string,
     currentPos: { x: number; y: number }
   ) => {
@@ -239,6 +303,12 @@ export default function CardPreview({
           Math.round(percentX * 10) / 10,
           Math.round(percentY * 10) / 10
         );
+      } else if (activeDragItem.type === 'customImage') {
+        onUpdateCustomImagePosition?.(
+          activeDragItem.id,
+          Math.round(percentX * 10) / 10,
+          Math.round(percentY * 10) / 10
+        );
       }
     };
 
@@ -266,6 +336,12 @@ export default function CardPreview({
         });
       } else if (activeDragItem.type === 'custom') {
         onUpdateCustomTextPosition(
+          activeDragItem.id,
+          Math.round(percentX * 10) / 10,
+          Math.round(percentY * 10) / 10
+        );
+      } else if (activeDragItem.type === 'customImage') {
+        onUpdateCustomImagePosition?.(
           activeDragItem.id,
           Math.round(percentX * 10) / 10,
           Math.round(percentY * 10) / 10
@@ -411,16 +487,7 @@ export default function CardPreview({
               <path d="M -10,110 L 110,-10 M -10,120 L 120,-10 M -10,100 L 100,-10" strokeWidth="0.06" strokeDasharray="2 2" />
             </svg>
             
-            {/* Elegant "RF" Republican Monogram in the background */}
-            {activeSide === 'recto' ? (
-              <div className="absolute right-[14%] top-[28%] text-[68px] font-black font-sans text-sky-800/[0.04] tracking-widest select-none pointer-events-none">
-                RF
-              </div>
-            ) : (
-              <div className="absolute left-[38%] top-[25%] text-[75px] font-black font-sans text-sky-800/[0.04] tracking-widest select-none pointer-events-none">
-                RF
-              </div>
-            )}
+            {/* Subtle elegant design pattern in place of monogram */}
           </div>
         )}
 
@@ -504,9 +571,7 @@ export default function CardPreview({
                         })}
                       </g>
                     </svg>
-                    <span className="relative z-10 text-[7px] font-black text-white font-sans leading-none tracking-tight">
-                      {countryConfig.countryCode}
-                    </span>
+                    {/* Country letters removed for a clean, generic layout */}
                   </div>
                 )}
               </div>
@@ -524,7 +589,7 @@ export default function CardPreview({
                 {project.countryCode === 'FR' && (
                   <div className="absolute right-12 top-14 w-20 h-20 rounded-full border border-blue-400/10 bg-radial from-blue-300/5 to-indigo-500/5 flex items-center justify-center opacity-45 pointer-events-none">
                     <div className="w-16 h-16 rounded-full border border-dashed border-red-400/20 flex items-center justify-center">
-                      <span className="text-[10px] font-mono font-black text-indigo-900/15 tracking-widest">RF</span>
+                      <span className="text-[10px] font-mono font-black text-indigo-900/15 tracking-widest"></span>
                     </div>
                   </div>
                 )}
@@ -643,7 +708,7 @@ export default function CardPreview({
                   ) : (
                     <div className="w-6.5 h-4.5 bg-[#003399] flex items-center justify-center text-[7.5px] font-extrabold text-white rounded-[2px] leading-none font-mono relative overflow-hidden shrink-0 shadow-sm">
                       <span className="absolute text-[11px] text-yellow-300/30 font-bold">★</span>
-                      <span className="relative z-10">{countryConfig.countryCode}</span>
+                      <span className="relative z-10"></span>
                     </div>
                   )}
                   <div className="flex flex-col justify-center">
@@ -729,7 +794,7 @@ export default function CardPreview({
                     </span>
                     <div className="w-6 h-4.5 rounded-[2px] bg-[#003399] flex items-center justify-center text-white text-[7.5px] font-bold relative font-mono shrink-0">
                       <span className="absolute text-[11px] text-yellow-300 opacity-40">★</span>
-                      <span className="relative z-10">{countryConfig.countryCode}</span>
+                      <span className="relative z-10"></span>
                     </div>
                   </div>
                 )}
@@ -804,10 +869,6 @@ export default function CardPreview({
                           <svg className="w-full h-full stroke-yellow-400 fill-none opacity-60" viewBox="0 0 100 130">
                             {/* Circular seal with stars over bottom-right of photo */}
                             <circle cx="75" cy="98" r="16" stroke="#4ade80" strokeWidth="0.8" strokeDasharray="2 1.5" />
-                            <text x="69" y="101.5" fontSize="9.5" fontWeight="900" fill="#4ade80" stroke="none" fontFamily="sans-serif">RF</text>
-                            
-                            {/* Giant "RF" monogram in green/yellow semi-transparent */}
-                            <text x="16" y="65" fontSize="42" fontWeight="900" fill="rgba(74, 222, 128, 0.35)" stroke="rgba(234, 179, 8, 0.2)" strokeWidth="0.5" fontFamily="sans-serif" letterSpacing="0.05em">RF</text>
                             
                             {/* Concentric security waves crossing the face in green and yellow */}
                             <path d="M-10 15 Q35 -5 90 25 T130 75" stroke="#EAB308" strokeWidth="0.6" opacity="0.8" />
@@ -863,6 +924,64 @@ export default function CardPreview({
                 </div>
               )}
             </div>
+
+            {/* Official Horizontal 2-Line Bottom MRZ with Country FLAG Ribbon Divider (Recto) */}
+            {template.category === 'id' && (
+              <div className="absolute left-0 right-0 bottom-0 bg-[#ffffff]/25 backdrop-blur-[0.5px] h-[52px] select-none font-mono flex flex-col justify-end pb-1.5 z-20 border-t border-slate-200/30 shadow-inner overflow-hidden rounded-b-[8px]">
+                {/* Colored flag divider line dividing the bottom horizontal zone */}
+                {project.countryCode === 'FR' && (
+                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
+                    <div className="w-1/3 bg-[#00209F]" />
+                    <div className="w-1/3 bg-white" />
+                    <div className="w-1/3 bg-[#E1000F]" />
+                  </div>
+                )}
+                {project.countryCode === 'DE' && (
+                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
+                    <div className="w-1/3 bg-black" />
+                    <div className="w-1/3 bg-[#dd0000]" />
+                    <div className="w-1/3 bg-[#ffce00]" />
+                  </div>
+                )}
+                {project.countryCode === 'ES' && (
+                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
+                    <div className="w-1/4 bg-[#c60b1e]" />
+                    <div className="w-1/2 bg-[#ffc400]" />
+                    <div className="w-1/4 bg-[#c60b1e]" />
+                  </div>
+                )}
+                {project.countryCode === 'IT' && (
+                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
+                    <div className="w-1/3 bg-[#009246]" />
+                    <div className="w-1/3 bg-white" />
+                    <div className="w-1/3 bg-[#ce2b37]" />
+                  </div>
+                )}
+                {project.countryCode === 'BE' && (
+                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
+                    <div className="w-1/3 bg-black" />
+                    <div className="w-1/3 bg-[#ffd100]" />
+                    <div className="w-1/3 bg-[#ff0000]" />
+                  </div>
+                )}
+                {project.countryCode === 'CH' && (
+                  <div className="absolute top-0 left-0 right-0 h-[4px] bg-[#dc2626]" />
+                )}
+                {!['FR', 'DE', 'ES', 'IT', 'BE', 'CH'].includes(project.countryCode) && (
+                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
+                    <div className="flex-1" style={{ backgroundColor: template.defaultColors.primary }} />
+                    <div className="flex-1 bg-white" />
+                    <div className="flex-1" style={{ backgroundColor: template.defaultColors.secondary || template.defaultColors.accent }} />
+                  </div>
+                )}
+
+                {/* Stretched 2-Line MRZ covering full bottom width */}
+                <div className="flex flex-col text-slate-950 font-black tracking-[0.24em] xs:tracking-[0.26em] md:tracking-[0.3em] leading-tight text-[8px] xs:text-[9.5px] md:text-[10.5px] text-center w-full uppercase px-1 font-mono">
+                  <span>{generateFrenchRecto2LineMRZ()[0]}</span>
+                  <span className="mt-0.5">{generateFrenchRecto2LineMRZ()[1]}</span>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -1151,6 +1270,113 @@ export default function CardPreview({
                 <span className="block w-full text-center tracking-[0.22em]">{mrzLines[2]}</span>
               </div>
             )}
+
+            {/* ---------------------------------------------------- */}
+            {/* TWO VERTICALLY ALIGNED IMAGE DROPZONES / UPLOAD SLOTS */}
+            {/* ---------------------------------------------------- */}
+            <div className="absolute top-[14px] left-[14px] flex flex-col gap-2 z-25">
+              {['slot_verso_tr_1', 'slot_verso_tr_2'].map((slotId, idx) => {
+                const img = project.customImages?.find((c) => c.id === slotId);
+                return (
+                  <div
+                    key={slotId}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.add('border-indigo-500', 'bg-indigo-50/20');
+                    }}
+                    onDragLeave={(e) => {
+                      e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50/20');
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50/20');
+                      const file = e.dataTransfer.files?.[0];
+                      if (file && file.type.startsWith('image/') && onAddCustomImage) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          if (event.target?.result) {
+                            onAddCustomImage(event.target.result as string, 20, {
+                              x: 4,
+                              y: idx === 0 ? 8 : 44,
+                              side: 'verso',
+                              id: slotId,
+                            });
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    style={{
+                      width: '96px',
+                      height: '70px',
+                    }}
+                    className={`relative rounded border border-dashed transition-all flex flex-col items-center justify-center overflow-hidden bg-white/70 backdrop-blur-[0.5px] group ${
+                      img ? 'border-indigo-400' : 'border-slate-350/80 hover:border-indigo-500'
+                    }`}
+                  >
+                    {img ? (
+                      <div className="relative w-full h-full flex items-center justify-center bg-slate-100">
+                        <img
+                          src={img.url}
+                          alt="Slot"
+                          className="w-full h-full object-cover transition-transform"
+                          style={{
+                            transform: `rotate(${img.rotation ?? 0}deg)`,
+                            opacity: img.opacity ?? 1,
+                          }}
+                        />
+                        {/* Overlay clear button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (onAddCustomImage) {
+                              onAddCustomImage('', 0, { x: 0, y: 0, side: 'verso', id: slotId });
+                            }
+                          }}
+                          className="absolute top-0.5 right-0.5 w-[14px] h-[14px] bg-red-650 text-white/90 rounded-full flex items-center justify-center hover:bg-red-700 hover:text-white shadow transition-colors pointer-events-auto z-30 bg-red-600 cursor-pointer"
+                        >
+                          <svg className="w-[8px] h-[8px] fill-none stroke-current stroke-[2.5]" viewBox="0 0 24 24">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer w-full h-full flex flex-col items-center justify-center p-1 relative">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file && onAddCustomImage) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                if (event.target?.result) {
+                                  onAddCustomImage(event.target.result as string, 20, {
+                                    x: 4,
+                                    y: idx === 0 ? 8 : 44,
+                                    side: 'verso',
+                                    id: slotId,
+                                  });
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                        <Upload className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition" strokeWidth={1.8} />
+                        <span className="text-[7.5px] font-bold text-slate-400 tracking-tight leading-tighter text-center uppercase group-hover:text-indigo-700 mt-0.5 font-sans">
+                          Photo {idx + 1}
+                        </span>
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </>
         )}
 
@@ -1305,6 +1531,33 @@ export default function CardPreview({
             }`}
           >
             {txt.text}
+          </div>
+        ))}
+
+        {/* Custom Draggable Images */}
+        {project.customImages?.filter(img => img.side === activeSide && img.id !== 'slot_verso_tr_1' && img.id !== 'slot_verso_tr_2').map((img) => (
+          <div
+            key={img.id}
+            onMouseDown={(e) => handleMouseDown(e, 'customImage', img.id, { x: img.x, y: img.y })}
+            onTouchStart={(e) => handleTouchStart(e, 'customImage', img.id, { x: img.x, y: img.y })}
+            style={{
+              left: `${img.x}%`,
+              top: `${img.y}%`,
+              width: `${img.width}%`,
+              opacity: img.opacity ?? 1,
+              transform: `rotate(${img.rotation ?? 0}deg)`,
+            }}
+            className={`absolute select-none z-30 transition-transform origin-center ${
+              isEditMode ? 'p-1 -m-1 border border-dashed border-emerald-500 rounded cursor-move bg-emerald-55/15 shadow-sm' : ''
+            }`}
+          >
+            <img 
+              src={img.url} 
+              alt="Custom graphical element" 
+              className="w-full h-auto object-contain pointer-events-none"
+              crossOrigin="anonymous" 
+              referrerPolicy="no-referrer"
+            />
           </div>
         ))}
       </div>

@@ -25,7 +25,9 @@ import {
   ChevronRight,
   MapPin, 
   Copy,
-  FolderSync
+  FolderSync,
+  FileCode,
+  MessageCircle
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -148,6 +150,9 @@ export default function App() {
   // Status for exporting actions
   const [isExporting, setIsExporting] = useState(false);
 
+  // Manually added image placement options
+  const [imagePlacementMode, setImagePlacementMode] = useState<'recto_center' | 'verso_center' | 'verso_vertical_stack' | 'verso_slot_1' | 'verso_slot_2'>('verso_vertical_stack');
+
   // Load project configurations on startup
   useEffect(() => {
     try {
@@ -221,6 +226,7 @@ export default function App() {
       },
       positions,
       customTexts: [],
+      customImages: [],
       showSecurityOverlay: true,
       showChip: template.category === 'id' || template.id === 'france-vitale',
       showSignatureOnCard: template.category === 'id' || template.category === 'permit' || template.id === 'press-badge',
@@ -355,6 +361,153 @@ export default function App() {
     updateActiveProject(updated);
   };
 
+  // Change dragging coordinates of custom images
+  const handleCustomImagePositionChange = (id: string, x: number, y: number) => {
+    if (!activeProject) return;
+    const updated = {
+      ...activeProject,
+      customImages: (activeProject.customImages || []).map((ci) => (ci.id === id ? { ...ci, x, y } : ci)),
+      updatedAt: new Date().toISOString(),
+    };
+    updateActiveProject(updated);
+  };
+
+  // Add custom image
+  const handleAddCustomImage = (
+    url: string, 
+    requestedWidth: number = 20,
+    extra?: { x: number; y: number; side: 'recto' | 'verso'; id?: string }
+  ) => {
+    if (!activeProject) return;
+
+    const customImages = [...(activeProject.customImages || [])];
+
+    // If extra parameters exist and have id: we are either removing or setting a specific slot image
+    if (extra && extra.id) {
+      const slotId = extra.id;
+      // If url is empty, it means REMOVING the image from that slot
+      if (!url) {
+        const updated = {
+          ...activeProject,
+          customImages: customImages.filter((im) => im.id !== slotId),
+          updatedAt: new Date().toISOString(),
+        };
+        updateActiveProject(updated);
+        showToast('Image du slot retirée', 'info');
+        return;
+      }
+
+      // Otherwise, update or insert slot image
+      const existingIndex = customImages.findIndex((img) => img.id === slotId);
+      const newImg = {
+        id: slotId,
+        url: url,
+        x: extra.x,
+        y: extra.y,
+        width: requestedWidth,
+        opacity: 1,
+        rotation: 0,
+        side: extra.side,
+      };
+
+      if (existingIndex > -1) {
+        customImages[existingIndex] = newImg;
+      } else {
+        customImages.push(newImg);
+      }
+
+      const updated = {
+        ...activeProject,
+        customImages: customImages,
+        updatedAt: new Date().toISOString(),
+      };
+      updateActiveProject(updated);
+      showToast('Image insérée dans la case !', 'success');
+      return;
+    }
+    
+    let targetSide: 'recto' | 'verso' = activeSide;
+    let targetX = 35;
+    let targetY = 35;
+
+    if (imagePlacementMode === 'recto_center') {
+      targetSide = 'recto';
+      targetX = 35;
+      targetY = 35;
+    } else if (imagePlacementMode === 'verso_center') {
+      targetSide = 'verso';
+      targetX = 35;
+      targetY = 35;
+    } else if (imagePlacementMode === 'verso_vertical_stack') {
+      targetSide = 'verso';
+      
+      // Calculate how many custom images already exist on the left side (x < 20) of the verso
+      const leftVersoImages = customImages
+        .filter(img => img.side === 'verso' && img.x < 20 && img.id !== 'slot_verso_tr_1' && img.id !== 'slot_verso_tr_2');
+      const index = leftVersoImages.length;
+      
+      targetX = 4; // left margin (e.g. 4%)
+      targetY = 4 + (index * 18); // height spacing (e.g. 18% per image)
+      
+      if (targetY > 78) {
+        // Shift a column right or start overlapping
+        const colShift = Math.floor(targetY / 80);
+        targetX = Math.min(60, 4 + colShift * 14);
+        targetY = 4 + ((index % 5) * 18);
+      }
+    } else if (imagePlacementMode === 'verso_slot_1') {
+      handleAddCustomImage(url, 20, { x: 4, y: 8, side: 'verso', id: 'slot_verso_tr_1' });
+      return;
+    } else if (imagePlacementMode === 'verso_slot_2') {
+      handleAddCustomImage(url, 20, { x: 4, y: 44, side: 'verso', id: 'slot_verso_tr_2' });
+      return;
+    }
+
+    // Add base CustomImage item
+    const newImg = {
+      id: `img_${Date.now()}`,
+      url: url,
+      x: targetX,
+      y: targetY,
+      width: requestedWidth,
+      opacity: 1,
+      rotation: 0,
+      side: targetSide,
+    };
+
+    const updated = {
+      ...activeProject,
+      customImages: [...customImages, newImg],
+      updatedAt: new Date().toISOString(),
+    };
+
+    updateActiveProject(updated);
+    showToast('Image insérée ! Activez le "Mode Édition" pour la glisser-déposer librement.', 'success');
+  };
+
+  // Remove a custom image
+  const handleRemoveCustomImage = (id: string) => {
+    if (!activeProject) return;
+    const updated = {
+      ...activeProject,
+      customImages: (activeProject.customImages || []).filter((im) => im.id !== id),
+      updatedAt: new Date().toISOString(),
+    };
+    updateActiveProject(updated);
+    showToast('Image personnalisée retirée', 'info');
+  };
+
+  // Adjust properties of a custom image (rotation, opacity, width)
+  const handleUpdateCustomImageProperty = (id: string, field: string, value: any) => {
+    if (!activeProject) return;
+    const updated = {
+      ...activeProject,
+      customImages: (activeProject.customImages || []).map((ci) => (ci.id === id ? { ...ci, [field]: value } : ci)),
+      updatedAt: new Date().toISOString(),
+    };
+    updateActiveProject(updated);
+  };
+
   const handleAddCustomText = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeProject || !newCustomText.trim()) return;
@@ -438,37 +591,60 @@ export default function App() {
     }
   };
 
-  // Helper to download a blob securely
-  const downloadBlob = (blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 150);
+  // Helper to download an image from a DataURL
+  const downloadImage = (dataUrl: string, filename: string = 'carte.png') => {
+    try {
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e: any) {
+      console.error('Error in downloadImage:', e);
+      showToast(`Échec du téléchargement direct : ${e.message || e}`, 'error');
+    }
+  };
+
+  // Helper to download a blob securely (used for jsPDF)
+  const downloadBlob = (blob: Blob, filename: string = 'carte.png') => {
+    try {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error('Error in downloadBlob:', e);
+      showToast(`Échec du téléchargement du fichier : ${e.message || e}`, 'error');
+    }
   };
 
   // Dynamic side capture function that switches activeSide and captures image
   const captureSide = async (side: 'recto' | 'verso'): Promise<string | null> => {
     setActiveSide(side);
     // Wait for the DOM and styling to fully render
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     const element = document.querySelector('#editor-card-container #print-card-target') || document.getElementById('print-card-target');
-    if (!element) return null;
+    if (!element) {
+      throw new Error(`Élément #print-card-target introuvable pour la face ${side}`);
+    }
     try {
       const canvas = await html2canvas(element as HTMLElement, {
-        scale: 3.2,
+        scale: 2.6, // Excellent quality-to-performance ratio, lightweight & reliable on Android
         backgroundColor: null,
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false, // MANDATORY: avoids SecurityError with fonts/custom images
         logging: false,
+        imageTimeout: 5000,
       });
       return canvas.toDataURL('image/png');
-    } catch (e) {
+    } catch (e: any) {
       console.error('html2canvas exception:', e);
-      return null;
+      throw new Error(`html2canvas a échoué sur ${side}: ${e.message || e}`);
     }
   };
 
@@ -477,6 +653,10 @@ export default function App() {
     if (!activeProject || !activeTemplate) return;
     setIsExporting(true);
     const savedSide = activeSide;
+    const savedEditMode = isEditMode;
+    
+    // Disable edit mode visual indicators temporarily
+    setIsEditMode(false);
     showToast("Génération du PDF recto/verso de haute qualité...", 'info');
 
     try {
@@ -506,15 +686,15 @@ export default function App() {
       pdf.addPage([docWidth, docHeight], isVert ? 'portrait' : 'landscape');
       pdf.addImage(versoData, 'PNG', 0, 0, docWidth, docHeight);
 
-      // Save PDF via robust blob downloader
-      const pdfBlob = pdf.output('blob');
-      downloadBlob(pdfBlob, `Carte_RectoVerso_${activeProject.name.replace(/\s+/g, '_')}.pdf`);
-      showToast("PDF double page (Recto & Verso) à l'échelle standard téléchargé !", 'success');
+      // Save PDF natively via jsPDF's built-in robust downloader (optimal for mobile & desktop)
+      pdf.save(`Carte_RectoVerso_${activeProject.name.replace(/\s+/g, '_')}.pdf`);
+      showToast("PDF double page (Recto & Verso) téléchargé avec succès !", 'success');
     } catch (err: any) {
       console.error('Export error', err);
-      showToast(`Échec de la génération PDF : ${err.message}`, 'error');
+      showToast(`Échec de la génération PDF : ${err.message || err}`, 'error');
     } finally {
       setActiveSide(savedSide);
+      setIsEditMode(savedEditMode);
       setIsExporting(false);
     }
   };
@@ -524,32 +704,190 @@ export default function App() {
     if (!activeProject) return;
     setIsExporting(true);
     const savedSide = activeSide;
+    const savedEditMode = isEditMode;
+
+    // Disable edit mode visual indicators temporarily
+    setIsEditMode(false);
     showToast("Génération des images haute définition (Recto & Verso)...", 'info');
 
     try {
       // Capture Recto
       const rectoData = await captureSide('recto');
       if (rectoData) {
-        const rectoBlob = dataURLtoBlob(rectoData);
-        downloadBlob(rectoBlob, `Carte_${activeProject.name.replace(/\s+/g, '_')}_Recto.png`);
+        downloadImage(rectoData, `Carte_${activeProject.name.replace(/\s+/g, '_')}_Recto.png`);
+      } else {
+        throw new Error("Échec du rendu de la face Recto.");
       }
 
       // Small pause to prevent browser downloads blocking
-      await new Promise((r) => setTimeout(r, 450));
+      await new Promise((r) => setTimeout(r, 600));
 
       // Capture Verso
       const versoData = await captureSide('verso');
       if (versoData) {
-        const versoBlob = dataURLtoBlob(versoData);
-        downloadBlob(versoBlob, `Carte_${activeProject.name.replace(/\s+/g, '_')}_Verso.png`);
+        downloadImage(versoData, `Carte_${activeProject.name.replace(/\s+/g, '_')}_Verso.png`);
+      } else {
+        throw new Error("Échec du rendu de la face Verso.");
       }
 
-      showToast("Images PNG UHD (Recto & Verso) téléchargées !", 'success');
-    } catch (err) {
+      showToast("Images PNG UHD (Recto & Verso) téléchargées avec succès !", 'success');
+    } catch (err: any) {
       console.error('PNG Export error:', err);
-      showToast("Échec de l'export PNG", 'error');
+      showToast(`Échec de l'export PNG : ${err.message || err}`, 'error');
     } finally {
       setActiveSide(savedSide);
+      setIsEditMode(savedEditMode);
+      setIsExporting(false);
+    }
+  };
+
+  // Standalone self-contained HTML export of the card layout (with inline styles)
+  const handleExportHTML = async () => {
+    if (!activeProject || !activeTemplate) return;
+    setIsExporting(true);
+    const savedEditMode = isEditMode;
+    // Momentarily turn off edit highlights to get original print quality look
+    setIsEditMode(false);
+    showToast("Préparation de l'export HTML...", 'info');
+
+    try {
+      // Small pause for state to fully apply
+      await new Promise((r) => setTimeout(r, 100));
+
+      const element = document.querySelector('#editor-card-container #print-card-target') || document.getElementById('print-card-target');
+      if (!element) {
+        throw new Error("Élément de carte introuvable");
+      }
+
+      // Clone card structure
+      const clone = element.cloneNode(true) as HTMLElement;
+      
+      // Strip out interactive edit elements if any remains
+      clone.querySelectorAll('.ring-2').forEach(el => el.classList.remove('ring-2', 'ring-indigo-500'));
+      clone.querySelectorAll('.cursor-move').forEach(el => el.classList.remove('cursor-move'));
+
+      const coreHtml = clone.outerHTML;
+
+      const fullHtmlString = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carte ID - ${activeProject.name}</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: #0f172a;
+      color: #fafafa;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .badge-card-container {
+      margin-top: 16px;
+      transform: scale(1);
+      transform-origin: center;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    @media (max-width: 520px) {
+      .badge-card-container {
+        transform: scale(0.72);
+      }
+    }
+  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div style="text-align: center; max-width: 480px; margin-bottom: 20px;">
+    <h2 style="font-weight: 800; font-size: 20px; color: #6366f1; margin: 0 0 4px 0;">${activeProject.name}</h2>
+    <p style="font-size: 11px; opacity: 0.6; margin: 0;">Carte ID générée par l'Éditeur • Sauvegarde HTML complète (${activeSide.toUpperCase()})</p>
+  </div>
+  
+  <div class="badge-card-container">
+    ${coreHtml}
+  </div>
+
+  <div style="margin-top: 24px; text-align: center;">
+    <button onclick="window.print()" style="padding: 10px 20px; background-color: #1e1b4b; border: 1px solid #4338ca; color: #ffffff; font-size: 12px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s;">
+      Imprimer la Carte / Enregistrer en PDF
+    </button>
+  </div>
+</body>
+</html>`;
+
+      const blob = new Blob([fullHtmlString], { type: 'text/html;charset=utf-8' });
+      downloadBlob(blob, `Carte_${activeProject.name.replace(/\s+/g, '_')}_${activeSide}.html`);
+      showToast("Fichier de sauvegarde HTML de la carte téléchargé avec succès !", 'success');
+    } catch (err: any) {
+      console.error('HTML Export error:', err);
+      showToast(`Échec de l'export HTML : ${err.message || err}`, 'error');
+    } finally {
+      setIsEditMode(savedEditMode);
+      setIsExporting(false);
+    }
+  };
+
+  // WhatsApp transfer with local download + Web Share + direct API fallback
+  const handleExportWhatsApp = async () => {
+    if (!activeProject) return;
+    setIsExporting(true);
+    const savedSide = activeSide;
+    const savedEditMode = isEditMode;
+    setIsEditMode(false);
+    showToast("Préparation et enregistrement de l'image de la carte...", 'info');
+
+    try {
+      // 1. Capture the specific active side image first as high-res PNG
+      const dataUrl = await captureSide(activeSide);
+      if (!dataUrl) throw new Error("Échec de la capture d'image");
+
+      // 2. Download automatically to local system/internal storage (telechargement local)
+      const sanitizedName = activeProject.name.replace(/\s+/g, '_');
+      const filename = `Carte_${sanitizedName}_${activeSide}.png`;
+      downloadImage(dataUrl, filename);
+      
+      // Let it breathe for downloads
+      await new Promise((r) => setTimeout(r, 200));
+
+      // 3. Formulate the share message
+      const docNumStr = activeProject.fields.doc_num ? ` (N° : ${activeProject.fields.doc_num})` : "";
+      const textMessage = `Voici ma carte "${activeProject.name}"${docNumStr} exportée en haute définition.`;
+
+      // 4. Invoke native share if supported (mobile chrome / webview / safaris)
+      const blob = dataURLtoBlob(dataUrl);
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], filename, { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: activeProject.name,
+              text: textMessage,
+            });
+            showToast("Partagé sur WhatsApp avec succès !", 'success');
+            return;
+          } catch (shareErr) {
+            console.log("Web Share API rejected or failed:", shareErr);
+          }
+        }
+      }
+
+      // 5. Fallback link to WhatsApp
+      const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textMessage + ' (Image téléchargée et enregistrée sur votre stockage interne, veuillez la joindre pour l\'envoyer)')}`;
+      window.open(whatsappUrl, '_blank');
+      showToast("Carte enregistrée ! Redirection vers WhatsApp...", 'success');
+    } catch (err: any) {
+      console.error('WhatsApp export error:', err);
+      showToast(`Échec WhatsApp : ${err.message || err}`, 'error');
+    } finally {
+      setActiveSide(savedSide);
+      setIsEditMode(savedEditMode);
       setIsExporting(false);
     }
   };
@@ -957,6 +1295,8 @@ export default function App() {
                   activeSide={activeSide}
                   onUpdatePosition={handlePositionChange}
                   onUpdateCustomTextPosition={handleCustomTextPositionChange}
+                  onUpdateCustomImagePosition={handleCustomImagePositionChange}
+                  onAddCustomImage={handleAddCustomImage}
                 />
               </div>
             </div>
@@ -981,23 +1321,46 @@ export default function App() {
           </div>
 
           {/* Export and download triggers bar */}
-          <div className="w-full grid grid-cols-2 gap-3" id="exportation-panel">
-            <button
-              onClick={handleExportPDF}
-              disabled={isExporting}
-              className="py-2.5 px-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
-            >
-              <FileDown className="w-4 h-4 text-emerald-400" />
-              Télécharger PDF
-            </button>
-            <button
-              onClick={handleExportPNG}
-              disabled={isExporting}
-              className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
-            >
-              <Download className="w-4 h-4 text-indigo-200" />
-              Télécharger Image PNG
-            </button>
+          <div className="w-full flex flex-col gap-3" id="exportation-panel">
+            <div className="w-full grid grid-cols-2 gap-3">
+              <button
+                onClick={handleExportPDF}
+                disabled={isExporting}
+                className="py-2.5 px-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+              >
+                <FileDown className="w-4 h-4 text-emerald-400" />
+                Télécharger PDF
+              </button>
+              <button
+                onClick={handleExportPNG}
+                disabled={isExporting}
+                className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-indigo-200" />
+                Télécharger Image PNG
+              </button>
+            </div>
+
+            <div className="w-full grid grid-cols-2 gap-3">
+              <button
+                onClick={handleExportHTML}
+                disabled={isExporting}
+                className="py-2.5 px-4 bg-slate-700 hover:bg-slate-650 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                title="Télécharge la maquette vectorielle au format d'une page HTML autonome pour votre stockage local"
+              >
+                <FileCode className="w-4 h-4 text-cyan-300" />
+                Télécharger HTML
+              </button>
+              <button
+                onClick={handleExportWhatsApp}
+                disabled={isExporting}
+                className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                title="Télécharge l'image de la carte et l'envoie sur WhatsApp"
+              >
+                <MessageCircle className="w-4 h-4 text-green-150 animate-bounce" />
+                Partager WhatsApp
+              </button>
+            </div>
           </div>
 
           {/* Custom draggable user texts dashboard */}
@@ -1034,6 +1397,7 @@ export default function App() {
               { key: 'fields', label: 'Champs' },
               { key: 'appearance', label: 'Esthétique' },
               { key: 'texts', label: 'Textes' },
+              { key: 'images', label: 'Images' },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -1389,6 +1753,320 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              {/* TAB 4: ADD GRAPHICS & IMAGES */}
+              {activeTab === 'images' && (
+                <div className="space-y-4">
+                  <div>
+                    <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 font-sans">Ajouter un logo ou une image</span>
+                    
+                    {/* Destination/mode selector for manually added images */}
+                    <div className="mb-4 bg-amber-50/20 p-2.5 rounded-lg border border-amber-500/25">
+                      <span className="block text-[9.5px] font-bold text-amber-700 uppercase tracking-widest mb-1.5 font-sans">Options d'emplacement & Alignement</span>
+                      <div className="space-y-1.5">
+                        <label className={`flex items-start gap-2 p-1.5 rounded border text-[10.5px] cursor-pointer transition ${
+                          imagePlacementMode === 'verso_vertical_stack' 
+                            ? 'bg-emerald-55/35 border-emerald-500/40 text-emerald-900 font-medium' 
+                            : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
+                        }`}>
+                          <input 
+                            type="radio" 
+                            name="placement_mode" 
+                            checked={imagePlacementMode === 'verso_vertical_stack'} 
+                            onChange={() => setImagePlacementMode('verso_vertical_stack')} 
+                            className="mt-0.5 accent-emerald-600 cursor-pointer shrink-0"
+                          />
+                          <div className="leading-tight">
+                            <span className="font-bold text-slate-800 text-[10px]">Aligneurs automatiques Verso (Dos)</span>
+                            <span className="text-[8.5px] text-slate-500 block mt-0.5">
+                              Toutes les photos sont installées l'une après l'autre verticalement dans le coin gauche.
+                            </span>
+                          </div>
+                        </label>
+
+                        <label className={`flex items-start gap-2 p-1.5 rounded border text-[10.5px] cursor-pointer transition ${
+                          imagePlacementMode === 'recto_center' 
+                            ? 'bg-indigo-55/35 border-indigo-500/40 text-indigo-900 font-medium' 
+                            : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
+                        }`}>
+                          <input 
+                            type="radio" 
+                            name="placement_mode" 
+                            checked={imagePlacementMode === 'recto_center'} 
+                            onChange={() => setImagePlacementMode('recto_center')} 
+                            className="mt-0.5 accent-indigo-600 cursor-pointer shrink-0"
+                          />
+                          <div className="leading-tight">
+                            <span className="font-bold text-slate-800 text-[10px]">Recto (Face) - Centré</span>
+                            <span className="text-[8.5px] text-slate-500 block mt-0.5">
+                              L'image sera déposée au milieu de la face avant de la carte d'identité.
+                            </span>
+                          </div>
+                        </label>
+
+                        <label className={`flex items-start gap-2 p-1.5 rounded border text-[10.5px] cursor-pointer transition ${
+                          imagePlacementMode === 'verso_center' 
+                            ? 'bg-indigo-55/35 border-indigo-500/40 text-indigo-900 font-medium' 
+                            : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
+                        }`}>
+                          <input 
+                            type="radio" 
+                            name="placement_mode" 
+                            checked={imagePlacementMode === 'verso_center'} 
+                            onChange={() => setImagePlacementMode('verso_center')} 
+                            className="mt-0.5 accent-indigo-600 cursor-pointer shrink-0"
+                          />
+                          <div className="leading-tight">
+                            <span className="font-bold text-slate-855 text-[10px]">Verso (Dos) - Centré</span>
+                            <span className="text-[8.5px] text-slate-500 block mt-0.5">
+                              L'image sera déposée au milieu du dos de la carte d'identité.
+                            </span>
+                          </div>
+                        </label>
+
+                        <label className={`flex items-start gap-2 p-1.5 rounded border text-[10.5px] cursor-pointer transition ${
+                          imagePlacementMode === 'verso_slot_1' 
+                            ? 'bg-indigo-55/35 border-indigo-500/40 text-indigo-900 font-medium' 
+                            : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
+                        }`}>
+                          <input 
+                            type="radio" 
+                            name="placement_mode" 
+                            checked={imagePlacementMode === 'verso_slot_1'} 
+                            onChange={() => setImagePlacementMode('verso_slot_1')} 
+                            className="mt-0.5 accent-indigo-600 cursor-pointer shrink-0"
+                          />
+                          <div className="leading-tight">
+                            <span className="font-bold text-slate-800 text-[10px]">Case Verso Haut Gauche (Photo 1)</span>
+                            <span className="text-[8.5px] text-slate-500 block mt-0.5">
+                              L'image sera déposée dans la première case de téléversement en haut à gauche du verso.
+                            </span>
+                          </div>
+                        </label>
+
+                        <label className={`flex items-start gap-2 p-1.5 rounded border text-[10.5px] cursor-pointer transition ${
+                          imagePlacementMode === 'verso_slot_2' 
+                            ? 'bg-indigo-55/35 border-indigo-500/40 text-indigo-900 font-medium' 
+                            : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
+                        }`}>
+                          <input 
+                            type="radio" 
+                            name="placement_mode" 
+                            checked={imagePlacementMode === 'verso_slot_2'} 
+                            onChange={() => setImagePlacementMode('verso_slot_2')} 
+                            className="mt-0.5 accent-indigo-600 cursor-pointer shrink-0"
+                          />
+                          <div className="leading-tight">
+                            <span className="font-bold text-slate-800 text-[10px]">Case Verso Haut Gauche (Photo 2)</span>
+                            <span className="text-[8.5px] text-slate-500 block mt-0.5">
+                              L'image sera déposée dans la deuxième case de téléversement en haut à gauche du verso.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                  {/* Presets Grid */}
+                  <div className="mb-4 bg-slate-50 p-2.5 rounded-lg border border-slate-205">
+                    <span className="block text-[9.5px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 font-sans">Presets officiels & puces</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { name: "Puce Dorée", url: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Golden_microchip_EMV.svg/150px-Golden_microchip_EMV.svg.png", width: 12 },
+                          { name: "Datamatrix", url: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Data_Matrix_Code.svg/150px-Data_Matrix_Code.svg.png", width: 14 },
+                          { name: "Logotype UE", url: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b7/Flag_of_Europe.svg/150px-Flag_of_Europe.svg.png", width: 14 },
+                          { name: "Signature", url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Signature_of_Jean-Baptiste_Colbert.svg/150px-Signature_of_Jean-Baptiste_Colbert.svg.png", width: 22 }
+                        ].map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleAddCustomImage(preset.url, preset.width)}
+                            className="bg-white border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/20 p-1.5 rounded-lg flex flex-col items-center justify-center transition cursor-pointer"
+                          >
+                            <img src={preset.url} alt={preset.name} className="h-7 object-contain pointer-events-none mb-1 opacity-80" />
+                            <span className="text-[8px] font-bold text-slate-500 tracking-tight leading-none text-center">{preset.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Drag-and-drop or Local upload selector */}
+                    <div className="mb-4">
+                      <span className="block text-[9.5px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 font-sans">Importer une image locale</span>
+                      <div className="border border-dashed border-slate-350 hover:border-indigo-500 rounded-lg p-3 bg-slate-50 text-center transition hover:bg-indigo-50/5 relative cursor-pointer group">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                if (event.target?.result) {
+                                  handleAddCustomImage(event.target.result as string, 16);
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                        />
+                        <p className="text-[10px] text-slate-500 font-bold leading-normal">
+                          Glissez-déposez ou <span className="text-indigo-600 underline">parcourez</span>
+                        </p>
+                        <p className="text-[8px] text-slate-400 font-medium mt-0.5">PNG, JPG ou SVG (Max: 5Mo)</p>
+                      </div>
+                    </div>
+
+                    {/* URL image box */}
+                    <div>
+                      <span className="block text-[9.5px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 font-sans">Ou depuis une adresse web (URL)</span>
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const formData = new FormData(e.currentTarget);
+                        const url = formData.get('imageUrl') as string;
+                        if (url?.trim()) {
+                          handleAddCustomImage(url.trim(), 16);
+                          e.currentTarget.reset();
+                        }
+                      }} className="flex gap-2">
+                        <input
+                          type="url"
+                          name="imageUrl"
+                          placeholder="https://example.com/logo.png"
+                          className="flex-1 text-[11px] px-2.5 py-1 border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:border-indigo-500 font-medium"
+                        />
+                        <button
+                          type="submit"
+                          className="bg-indigo-600 text-white text-[10px] rounded-lg px-3 py-1 font-bold hover:bg-indigo-700 transition shadow-sm cursor-pointer"
+                        >
+                          Ajouter
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Control Panel of existing placed Images */}
+                    {activeProject.customImages && activeProject.customImages.length > 0 && (
+                      <div className="mt-4 border-t border-slate-100 pt-4">
+                        <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 font-sans">Gestion des images posées</span>
+                        <div className="space-y-3 max-h-[190px] overflow-y-auto pr-1">
+                          {activeProject.customImages.map((img) => (
+                            <div key={img.id} className="flex flex-col gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                              <div className="flex items-center gap-2 justify-between">
+                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                  <img src={img.url} alt="Placed" className="w-6 h-6 object-contain rounded bg-white border border-slate-150 shrink-0" />
+                                  <span className="text-[9px] font-bold text-slate-600 uppercase font-mono tracking-tight truncate">{img.id.slice(-8)}</span>
+                                  <span className="text-[8px] font-bold text-indigo-500 uppercase tracking-wide shrink-0">
+                                    ({img.side === 'recto' ? 'Face' : 'Dos'})
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveCustomImage(img.id)}
+                                  className="text-[9.5px] font-bold text-red-500 uppercase tracking-wider hover:text-red-700 bg-red-50 hover:bg-red-100/50 px-2 py-0.5 rounded transition cursor-pointer"
+                                >
+                                  Retirer
+                                </button>
+                              </div>
+
+                              {/* Controls adjusting image (rotation, width, opacity) */}
+                              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-200/50">
+                                <div>
+                                  <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Taille ({img.width}%)</span>
+                                  <input
+                                    type="range"
+                                    min="4"
+                                    max="60"
+                                    value={img.width}
+                                    onChange={(e) => handleUpdateCustomImageProperty(img.id, 'width', parseInt(e.target.value, 10))}
+                                    className="w-full h-1 bg-slate-200 rounded appearance-none cursor-pointer accent-indigo-600"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 font-sans">Rot ({img.rotation ?? 0}°)</span>
+                                  <input
+                                    type="range"
+                                    min="-180"
+                                    max="180"
+                                    value={img.rotation ?? 0}
+                                    onChange={(e) => handleUpdateCustomImageProperty(img.id, 'rotation', parseInt(e.target.value, 10))}
+                                    className="w-full h-1 bg-slate-200 rounded appearance-none cursor-pointer accent-indigo-600"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Opa ({Math.round((img.opacity ?? 1) * 100)}%)</span>
+                                  <input
+                                    type="range"
+                                    min="10"
+                                    max="100"
+                                    value={Math.round((img.opacity ?? 1) * 100)}
+                                    onChange={(e) => handleUpdateCustomImageProperty(img.id, 'opacity', parseFloat(e.target.value) / 100)}
+                                    className="w-full h-1 bg-slate-200 rounded appearance-none cursor-pointer accent-indigo-600"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Controls adjusting position coordinates x and y manually */}
+                              <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-slate-100">
+                                <div>
+                                  <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Position Horis. X ({img.x}%)</span>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={img.x}
+                                    onChange={(e) => handleUpdateCustomImageProperty(img.id, 'x', parseInt(e.target.value, 10))}
+                                    className="w-full h-1 bg-slate-200 rounded appearance-none cursor-pointer accent-indigo-600"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Position Verti. Y ({img.y}%)</span>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={img.y}
+                                    onChange={(e) => handleUpdateCustomImageProperty(img.id, 'y', parseInt(e.target.value, 10))}
+                                    className="w-full h-1 bg-slate-200 rounded appearance-none cursor-pointer accent-indigo-600"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Side selector */}
+                              <div className="flex items-center justify-between pt-1 text-[8.5px] text-slate-500 font-bold">
+                                <span>Côté d'appartenance :</span>
+                                <div className="flex gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateCustomImageProperty(img.id, 'side', 'recto')}
+                                    className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition cursor-pointer ${
+                                      img.side === 'recto' 
+                                        ? 'bg-indigo-600 text-white' 
+                                        : 'bg-slate-200 hover:bg-slate-300 text-slate-650'
+                                    }`}
+                                  >
+                                    Face (Recto)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateCustomImageProperty(img.id, 'side', 'verso')}
+                                    className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition cursor-pointer ${
+                                      img.side === 'verso' 
+                                        ? 'bg-indigo-600 text-white' 
+                                        : 'bg-slate-200 hover:bg-slate-300 text-slate-650'
+                                    }`}
+                                  >
+                                    Dos (Verso)
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               
             </div>
           )}
@@ -1468,6 +2146,7 @@ export default function App() {
                       activeSide="recto"
                       onUpdatePosition={() => {}}
                       onUpdateCustomTextPosition={() => {}}
+                      onUpdateCustomImagePosition={() => {}}
                     />
                   </div>
                 </div>
@@ -1485,6 +2164,7 @@ export default function App() {
                       activeSide="verso"
                       onUpdatePosition={() => {}}
                       onUpdateCustomTextPosition={() => {}}
+                      onUpdateCustomImagePosition={() => {}}
                     />
                   </div>
                 </div>
@@ -1495,14 +2175,14 @@ export default function App() {
                 <p className="text-[11px] leading-relaxed text-slate-500 font-bold">
                   Cette prévisualisation affiche la carte dans sa configuration finale imprimable sans aucune bordure d'édition ni boutons de mouvement.
                 </p>
-                <div className="flex gap-2 justify-center">
+                <div className="flex flex-wrap gap-2 justify-center">
                   <button
                     onClick={() => {
                       setIsPreviewModalOpen(false);
                       handleExportPDF();
                     }}
                     disabled={isExporting}
-                    className="py-1.5 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 shadow"
+                    className="py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
                   >
                     <FileDown className="w-3.5 h-3.5 text-emerald-400" />
                     Télécharger PDF
@@ -1513,10 +2193,32 @@ export default function App() {
                       handleExportPNG();
                     }}
                     disabled={isExporting}
-                    className="py-1.5 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 shadow"
+                    className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5 text-indigo-250" />
                     Télécharger PNG
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsPreviewModalOpen(false);
+                      handleExportHTML();
+                    }}
+                    disabled={isExporting}
+                    className="py-1.5 px-3 bg-slate-700 hover:bg-slate-650 text-white rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
+                  >
+                    <FileCode className="w-3.5 h-3.5 text-cyan-300" />
+                    Télécharger HTML
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsPreviewModalOpen(false);
+                      handleExportWhatsApp();
+                    }}
+                    disabled={isExporting}
+                    className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-green-150" />
+                    Partager WhatsApp
                   </button>
                 </div>
               </div>
