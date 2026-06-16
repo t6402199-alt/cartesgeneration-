@@ -205,10 +205,14 @@ export default function App() {
     const positions: Record<string, DragItemPosition> = {
       photo_element: { x: template.dimensions.width > template.dimensions.height ? 4.5 : 22, y: 16, visible: true },
       chip_element: { x: 74, y: 16, visible: true },
-      signature_element: { x: 72, y: 52, visible: true },
+      signature_element: templateId === 'france-cni' ? { x: 44, y: 58, visible: true } : { x: 72, y: 52, visible: true },
       code_element: { x: 70, y: 70, visible: true },
       mrz_element: { x: 4, y: 82, visible: true }
     };
+
+    if (templateId === 'france-cni') {
+      positions.field_doc_code = { x: 44, y: 51, visible: true };
+    }
 
     return {
       id: `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -1954,7 +1958,11 @@ export default function App() {
                               <div className="flex items-center gap-2 justify-between">
                                 <div className="flex items-center gap-1.5 overflow-hidden">
                                   <img src={img.url} alt="Placed" className="w-6 h-6 object-contain rounded bg-white border border-slate-150 shrink-0" />
-                                  <span className="text-[9px] font-bold text-slate-600 uppercase font-mono tracking-tight truncate">{img.id.slice(-8)}</span>
+                                  <span className="text-[9px] font-bold text-slate-600 uppercase tracking-tight truncate">
+                                    {img.id === 'slot_verso_tr_1' ? 'Photo Verso 1 (Haut)' 
+                                     : img.id === 'slot_verso_tr_2' ? 'Photo Verso 2 (Bas)' 
+                                     : `Image ${img.id.slice(-6)}`}
+                                  </span>
                                   <span className="text-[8px] font-bold text-indigo-500 uppercase tracking-wide shrink-0">
                                     ({img.side === 'recto' ? 'Face' : 'Dos'})
                                   </span>

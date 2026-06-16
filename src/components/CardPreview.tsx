@@ -107,6 +107,128 @@ export default function CardPreview({
     return [line1, line2];
   };
 
+  const getCountryDividerSpecs = (countryCode: string) => {
+    const code = (countryCode || 'FR').toUpperCase();
+    switch (code) {
+      case 'FR':
+        return {
+          leftBg: 'linear-gradient(to right, #00209F 80%, rgba(0,32,159,0))',
+          rightBg: 'linear-gradient(to left, #E1000F 80%, rgba(225,0,15,0))',
+          label: 'RÉPUBLIQUE FRANÇAISE',
+          textColor: '#1e3a8a',
+        };
+      case 'DE':
+        return {
+          leftBg: 'linear-gradient(to right, #000000 80%, rgba(0,0,0,0))',
+          rightBg: 'linear-gradient(to left, #FFCE00 80%, rgba(255,206,0,0))',
+          label: 'BUNDESREPUBLIK DEUTSCHLAND',
+          textColor: '#dc2626',
+        };
+      case 'ES':
+        return {
+          leftBg: 'linear-gradient(to right, #c60b1e 80%, rgba(198,11,30,0))',
+          rightBg: 'linear-gradient(to left, #c60b1e 80%, rgba(198,11,30,0))',
+          label: 'REINO DE ESPAÑA',
+          textColor: '#ca8a04',
+        };
+      case 'IT':
+        return {
+          leftBg: 'linear-gradient(to right, #009246 80%, rgba(0,146,70,0))',
+          rightBg: 'linear-gradient(to left, #ce2b37 80%, rgba(206,43,55,0))',
+          label: 'REPUBBLICA ITALIANA',
+          textColor: '#0369a1',
+        };
+      case 'BE':
+        return {
+          leftBg: 'linear-gradient(to right, #000000 80%, rgba(0,0,0,0))',
+          rightBg: 'linear-gradient(to left, #ff0000 80%, rgba(255,0,0,0))',
+          label: 'ROYAUME DE BELGIQUE',
+          textColor: '#ffd100',
+        };
+      case 'CH':
+        return {
+          leftBg: 'linear-gradient(to right, #dc2626 80%, rgba(220,38,38,0))',
+          rightBg: 'linear-gradient(to left, #dc2626 80%, rgba(220,38,38,0))',
+          label: 'CONFÉDÉRATION SUISSE',
+          textColor: '#dc2626',
+        };
+      case 'NL':
+        return {
+          leftBg: 'linear-gradient(to right, #AE1C28 80%, rgba(174,28,40,0))',
+          rightBg: 'linear-gradient(to left, #21468B 80%, rgba(33,70,139,0))',
+          label: 'KONINKRIJK DER NEDERLANDEN',
+          textColor: '#1e3a8a',
+        };
+      case 'PT':
+        return {
+          leftBg: 'linear-gradient(to right, #006600 80%, rgba(0,102,0,0))',
+          rightBg: 'linear-gradient(to left, #ff0000 80%, rgba(255,0,0,0))',
+          label: 'REPÚBLICA PORTUGUESA',
+          textColor: '#ffd100',
+        };
+      case 'CA':
+        return {
+          leftBg: 'linear-gradient(to right, #ff0000 80%, rgba(255,0,0,0))',
+          rightBg: 'linear-gradient(to left, #ff0000 80%, rgba(255,0,0,0))',
+          label: 'CANADA / DEPARTMENT OF IMMIGRATION',
+          textColor: '#ff0000',
+        };
+      case 'AT':
+        return {
+          leftBg: 'linear-gradient(to right, #C60C30 80%, rgba(198,12,48,0))',
+          rightBg: 'linear-gradient(to left, #C60C30 80%, rgba(198,12,48,0))',
+          label: 'REPUBLIK ÖSTERREICH',
+          textColor: '#C60C30',
+        };
+      case 'PL':
+        return {
+          leftBg: 'linear-gradient(to right, #ffffff 80%, rgba(255,255,255,0))',
+          rightBg: 'linear-gradient(to left, #dc2626 80%, rgba(220,38,38,0))',
+          label: 'RZECZPOSPOLITA POLSKA',
+          textColor: '#dc2626',
+        };
+      case 'IE':
+        return {
+          leftBg: 'linear-gradient(to right, #169B62 80%, rgba(22,155,98,0))',
+          rightBg: 'linear-gradient(to left, #FF883E 80%, rgba(255,136,62,0))',
+          label: 'POBLACHT NA HÉIREANN',
+          textColor: '#169B62',
+        };
+      default:
+        return {
+          leftBg: `linear-gradient(to right, ${template.defaultColors.primary} 80%, rgba(0,0,0,0))`,
+          rightBg: `linear-gradient(to left, ${template.defaultColors.accent || template.defaultColors.secondary} 80%, rgba(0,0,0,0))`,
+          label: countryConfig.defaultHeaderName || 'OFFICIAL DOCUMENT',
+          textColor: template.defaultColors.primary,
+        };
+    }
+  };
+
+  const renderCountryDivider = () => {
+    if (template.category !== 'id') return null;
+    const specs = getCountryDividerSpecs(project.countryCode);
+    return (
+      <div 
+        className="absolute left-[4%] right-[4%] flex items-center justify-between pointer-events-none"
+        style={{ top: '71%' }}
+      >
+        {/* Left colored line/ribbon of security in flag color */}
+        <div className="flex-1 h-[1.5px]" style={{ background: specs.leftBg, opacity: 0.85 }} />
+        
+        {/* Central Bold Nation Banner */}
+        <span 
+          className="mx-3 text-[7.5px] font-black tracking-widest uppercase font-sans whitespace-nowrap"
+          style={{ color: specs.textColor }}
+        >
+          {specs.label}
+        </span>
+        
+        {/* Right colored line/ribbon of security in flag color */}
+        <div className="flex-1 h-[1.5px]" style={{ background: specs.rightBg, opacity: 0.85 }} />
+      </div>
+    );
+  };
+
   const renderLeftFlag = (code: string) => {
     switch (code) {
       case 'FR':
@@ -386,8 +508,8 @@ export default function CardPreview({
           case 'field_nom_usage':         return project.positions[`${key}_${activeSide}`] || project.positions[key] || { x: 38, y: 55, visible: true };
           case 'field_doc_num':           return project.positions[`${key}_${activeSide}`] || project.positions[key] || { x: 38, y: 64, visible: true };
           case 'field_date_expiration':   return project.positions[`${key}_${activeSide}`] || project.positions[key] || { x: 67, y: 64, visible: true };
-          case 'field_doc_code':          return project.positions[`${key}_${activeSide}`] || project.positions[key] || { x: 66, y: 81.5, visible: true };
-          case 'signature_element':       return project.positions[`${key}_${activeSide}`] || project.positions[key] || { x: 44, y: 73.5, visible: true };
+          case 'field_doc_code':          return project.positions[`${key}_${activeSide}`] || project.positions[key] || { x: 44, y: 51, visible: true };
+          case 'signature_element':       return project.positions[`${key}_${activeSide}`] || project.positions[key] || { x: 44, y: 58, visible: true };
           case 'photo_element':           return project.positions[`${key}_${activeSide}`] || project.positions[key] || { x: 3.5, y: 14.5, visible: true };
         }
       } else {
@@ -462,7 +584,7 @@ export default function CardPreview({
         )}
 
         {/* HIGH-FIDELITY FRANCE CNI GUILLOCHIS LAYER */}
-        {template.id === 'france-cni' && (
+        {template.category === 'id' && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-35" id="cni-vector-patterns">
             {/* Guillochis wavy security lines */}
             <svg className="absolute inset-0 w-full h-full stroke-indigo-600/30 fill-none" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -578,7 +700,7 @@ export default function CardPreview({
             )}
 
             {/* Left margin tricolor decorative bar for France CNI */}
-            {template.id === 'france-cni' && (
+            {template.category === 'id' && (
               <div className="absolute top-[38px] left-0 w-1 bottom-0 bg-gradient-to-b from-blue-600 via-white to-red-600 opacity-60 pointer-events-none" />
             )}
 
@@ -827,15 +949,15 @@ export default function CardPreview({
             {/* FRONT (RECTO) PHOTO RENDERING WITH HOLOGRAPHIC SEAL */}
             {/* ---------------------------------------------------- */}
             <div
-              onMouseDown={(e) => handleMouseDown(e, 'system', 'photo_element', getPos('photo_element', template.id === 'france-cni' ? 3.5 : 4, template.id === 'france-cni' ? 14.5 : 18))}
-              onTouchStart={(e) => handleTouchStart(e, 'system', 'photo_element', getPos('photo_element', template.id === 'france-cni' ? 3.5 : 4, template.id === 'france-cni' ? 14.5 : 18))}
+              onMouseDown={(e) => handleMouseDown(e, 'system', 'photo_element', getPos('photo_element', template.category === 'id' ? 3.5 : 4, template.category === 'id' ? 14.5 : 18))}
+              onTouchStart={(e) => handleTouchStart(e, 'system', 'photo_element', getPos('photo_element', template.category === 'id' ? 3.5 : 4, template.category === 'id' ? 14.5 : 18))}
               style={{
-                left: `${getPos('photo_element', template.id === 'france-cni' ? 3.5 : 4, template.id === 'france-cni' ? 14.5 : 18).x}%`,
-                top: `${getPos('photo_element', template.id === 'france-cni' ? 3.5 : 4, template.id === 'france-cni' ? 14.5 : 18).y}%`,
-                width: template.id === 'france-cni' 
+                left: `${getPos('photo_element', template.category === 'id' ? 3.5 : 4, template.category === 'id' ? 14.5 : 18).x}%`,
+                top: `${getPos('photo_element', template.category === 'id' ? 3.5 : 4, template.category === 'id' ? 14.5 : 18).y}%`,
+                width: template.category === 'id' 
                   ? (isVertical ? '92px' : '108px') 
                   : (isVertical ? '80px' : '90px'),
-                height: template.id === 'france-cni' 
+                height: template.category === 'id' 
                   ? (isVertical ? '122px' : '142px') 
                   : (isVertical ? '104px' : '118px'),
               }}
@@ -925,62 +1047,42 @@ export default function CardPreview({
               )}
             </div>
 
-            {/* Official Horizontal 2-Line Bottom MRZ with Country FLAG Ribbon Divider (Recto) */}
+            {/* Dynamic country flag line and 3-line MRZ at the bottom of the front card */}
             {template.category === 'id' && (
-              <div className="absolute left-0 right-0 bottom-0 bg-[#ffffff]/25 backdrop-blur-[0.5px] h-[52px] select-none font-mono flex flex-col justify-end pb-1.5 z-20 border-t border-slate-200/30 shadow-inner overflow-hidden rounded-b-[8px]">
-                {/* Colored flag divider line dividing the bottom horizontal zone */}
-                {project.countryCode === 'FR' && (
-                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
-                    <div className="w-1/3 bg-[#00209F]" />
-                    <div className="w-1/3 bg-white" />
-                    <div className="w-1/3 bg-[#E1000F]" />
+              <>
+                {renderCountryDivider()}
+                <div
+                  onMouseDown={(e) => handleMouseDown(e, 'system', 'mrz_element', { x: 0, y: 74 })}
+                  onTouchStart={(e) => handleTouchStart(e, 'system', 'mrz_element', { x: 0, y: 74 })}
+                  style={{
+                    left: '0%',
+                    top: '74%',
+                    width: '100%',
+                    height: '26%',
+                  }}
+                  className={`absolute select-none font-mono flex flex-col justify-center px-4 md:px-5 pb-1 z-10 transition-colors bg-[#fbfbfe]/95 border-t border-slate-300 rounded-b-[14px] ${
+                    isEditMode ? 'cursor-move ring-2 ring-indigo-500 ring-offset-0 border-dashed bg-indigo-50/40' : ''
+                  }`}
+                >
+                  <div className="flex flex-col gap-0.5 justify-center w-full font-black text-slate-950 leading-none text-[8.2px] md:text-[9.2px] tracking-normal mb-1">
+                    <div className="flex justify-between w-full">
+                      {mrzLines[0].split('').map((char, index) => (
+                        <span key={index} className="font-mono leading-none">{char}</span>
+                      ))}
+                    </div>
+                    <div className="flex justify-between w-full">
+                      {mrzLines[1].split('').map((char, index) => (
+                        <span key={index} className="font-mono leading-none">{char}</span>
+                      ))}
+                    </div>
+                    <div className="flex justify-between w-full">
+                      {mrzLines[2].split('').map((char, index) => (
+                        <span key={index} className="font-mono leading-none">{char}</span>
+                      ))}
+                    </div>
                   </div>
-                )}
-                {project.countryCode === 'DE' && (
-                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
-                    <div className="w-1/3 bg-black" />
-                    <div className="w-1/3 bg-[#dd0000]" />
-                    <div className="w-1/3 bg-[#ffce00]" />
-                  </div>
-                )}
-                {project.countryCode === 'ES' && (
-                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
-                    <div className="w-1/4 bg-[#c60b1e]" />
-                    <div className="w-1/2 bg-[#ffc400]" />
-                    <div className="w-1/4 bg-[#c60b1e]" />
-                  </div>
-                )}
-                {project.countryCode === 'IT' && (
-                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
-                    <div className="w-1/3 bg-[#009246]" />
-                    <div className="w-1/3 bg-white" />
-                    <div className="w-1/3 bg-[#ce2b37]" />
-                  </div>
-                )}
-                {project.countryCode === 'BE' && (
-                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
-                    <div className="w-1/3 bg-black" />
-                    <div className="w-1/3 bg-[#ffd100]" />
-                    <div className="w-1/3 bg-[#ff0000]" />
-                  </div>
-                )}
-                {project.countryCode === 'CH' && (
-                  <div className="absolute top-0 left-0 right-0 h-[4px] bg-[#dc2626]" />
-                )}
-                {!['FR', 'DE', 'ES', 'IT', 'BE', 'CH'].includes(project.countryCode) && (
-                  <div className="absolute top-0 left-0 right-0 h-[4px] flex">
-                    <div className="flex-1" style={{ backgroundColor: template.defaultColors.primary }} />
-                    <div className="flex-1 bg-white" />
-                    <div className="flex-1" style={{ backgroundColor: template.defaultColors.secondary || template.defaultColors.accent }} />
-                  </div>
-                )}
-
-                {/* Stretched 2-Line MRZ covering full bottom width */}
-                <div className="flex flex-col text-slate-950 font-black tracking-[0.24em] xs:tracking-[0.26em] md:tracking-[0.3em] leading-tight text-[8px] xs:text-[9.5px] md:text-[10.5px] text-center w-full uppercase px-1 font-mono">
-                  <span>{generateFrenchRecto2LineMRZ()[0]}</span>
-                  <span className="mt-0.5">{generateFrenchRecto2LineMRZ()[1]}</span>
                 </div>
-              </div>
+              </>
             )}
           </>
         )}
@@ -1037,7 +1139,7 @@ export default function CardPreview({
             )}
 
             {/* Vertical serial number on the far left edge of the France CNI */}
-            {project.countryCode === 'FR' && (
+            {template.category === 'id' && (
               <div 
                 className="absolute left-[3.2%] top-[14%] h-[68%] flex items-center justify-center font-mono text-[6.8px] md:text-[7.2px] font-black text-slate-700/80 tracking-[0.16em] select-none pointer-events-none"
                 style={{
@@ -1212,7 +1314,7 @@ export default function CardPreview({
             )}
 
             {/* France CNI contactless RFID purple badge indicator */}
-            {project.countryCode === 'FR' && (
+            {template.category === 'id' && (
               <div 
                 className="absolute w-[42px] h-[20px] rounded-[3px] bg-[#6d28d9] flex items-center justify-center border border-indigo-900/10 pointer-events-none shadow-sm"
                 style={{
@@ -1229,45 +1331,40 @@ export default function CardPreview({
             )}
 
             {/* Bottom official details for CNI (Tricolor ribbon separating MRZ) */}
-            {template.id === 'france-cni' && (
-              <div 
-                className="absolute left-[4%] right-[4%] flex items-center justify-between"
-                style={{ top: '71.5%' }}
-              >
-                {/* Left blue dashed line of security */}
-                <div className="flex-1 h-[1.5px] bg-gradient-to-r from-blue-700/80 to-blue-500/80 opacity-80" />
-                
-                {/* Central Bold Nation Banner */}
-                <span className="mx-3 text-[7.5px] font-black tracking-widest text-[#1e3a8a] uppercase font-sans whitespace-nowrap">
-                  RÉPUBLIQUE FRANÇAISE
-                </span>
-                
-                {/* Right red dashed line of security */}
-                <div className="flex-1 h-[1.5px] bg-gradient-to-r from-red-500/80 to-red-700/80 opacity-80" />
-              </div>
-            )}
+            {template.category === 'id' && renderCountryDivider()}
 
             {/* Standard Machine Readable Zone (MRZ) bottom segment on the back card */}
             {template.category === 'id' && (
               <div
-                onMouseDown={(e) => handleMouseDown(e, 'system', 'mrz_element', getPos('mrz_element', 2.5, 76.5))}
-                onTouchStart={(e) => handleTouchStart(e, 'system', 'mrz_element', getPos('mrz_element', 2.5, 76.5))}
+                onMouseDown={(e) => handleMouseDown(e, 'system', 'mrz_element', { x: 0, y: 74 })}
+                onTouchStart={(e) => handleTouchStart(e, 'system', 'mrz_element', { x: 0, y: 74 })}
                 style={{
-                  left: `${getPos('mrz_element', 2.5, 76.5).x}%`,
-                  top: `${getPos('mrz_element', 2.5, 76.5).y}%`,
-                  width: template.id === 'france-cni' ? '95%' : '92%',
+                  left: '0%',
+                  top: '74%',
+                  width: '100%',
+                  height: '26%',
                 }}
-                className={`absolute select-none font-mono flex flex-col font-black text-slate-950 leading-relaxed z-10 ${
-                  template.id === 'france-cni'
-                    ? 'tracking-[0.22em] text-[8.2px] md:text-[9.2px] bg-[#f8fafc]/10 px-1 py-1 rounded-sm'
-                    : 'tracking-[0.14em] text-[7.2px] md:text-[7.8px] bg-[#f8fafc]/30 px-1.5 py-1 rounded-sm'
-                } ${
-                  isEditMode ? 'cursor-move ring-2 ring-indigo-500 ring-offset-1 border-dashed' : ''
+                className={`absolute select-none font-mono flex flex-col justify-center px-4 md:px-5 pb-1 z-10 transition-colors bg-[#fbfbfe]/95 border-t border-slate-300 rounded-b-[14px] ${
+                  isEditMode ? 'cursor-move ring-2 ring-indigo-500 ring-offset-0 border-dashed bg-indigo-50/40' : ''
                 }`}
               >
-                <span className="block w-full text-center tracking-[0.22em]">{mrzLines[0]}</span>
-                <span className="block w-full text-center tracking-[0.22em]">{mrzLines[1]}</span>
-                <span className="block w-full text-center tracking-[0.22em]">{mrzLines[2]}</span>
+                <div className="flex flex-col gap-0.5 justify-center w-full font-black text-slate-950 leading-none text-[8.2px] md:text-[9.2px] tracking-normal mb-1">
+                  <div className="flex justify-between w-full">
+                    {mrzLines[0].split('').map((char, index) => (
+                      <span key={index} className="font-mono leading-none">{char}</span>
+                    ))}
+                  </div>
+                  <div className="flex justify-between w-full">
+                    {mrzLines[1].split('').map((char, index) => (
+                      <span key={index} className="font-mono leading-none">{char}</span>
+                    ))}
+                  </div>
+                  <div className="flex justify-between w-full">
+                    {mrzLines[2].split('').map((char, index) => (
+                      <span key={index} className="font-mono leading-none">{char}</span>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1315,34 +1412,46 @@ export default function CardPreview({
                     }`}
                   >
                     {img ? (
-                      <div className="relative w-full h-full flex items-center justify-center bg-slate-100">
+                      <label className="cursor-pointer w-full h-full flex items-center justify-center bg-slate-100 relative group/slot">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file && onAddCustomImage) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                if (event.target?.result) {
+                                  onAddCustomImage(event.target.result as string, 20, {
+                                    x: 4,
+                                    y: idx === 0 ? 8 : 44,
+                                    side: 'verso',
+                                    id: slotId,
+                                  });
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
                         <img
                           src={img.url}
                           alt="Slot"
-                          className="w-full h-full object-cover transition-transform"
+                          className="w-full h-full object-cover transition-transform group-hover/slot:scale-105"
                           style={{
                             transform: `rotate(${img.rotation ?? 0}deg)`,
                             opacity: img.opacity ?? 1,
                           }}
                         />
-                        {/* Overlay clear button */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            if (onAddCustomImage) {
-                              onAddCustomImage('', 0, { x: 0, y: 0, side: 'verso', id: slotId });
-                            }
-                          }}
-                          className="absolute top-0.5 right-0.5 w-[14px] h-[14px] bg-red-650 text-white/90 rounded-full flex items-center justify-center hover:bg-red-700 hover:text-white shadow transition-colors pointer-events-auto z-30 bg-red-600 cursor-pointer"
-                        >
-                          <svg className="w-[8px] h-[8px] fill-none stroke-current stroke-[2.5]" viewBox="0 0 24 24">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      </div>
+                        {isEditMode && (
+                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover/slot:opacity-100 transition-opacity pointer-events-none z-10">
+                            <span className="text-[8px] font-bold text-white uppercase text-center tracking-wider bg-slate-900/85 px-1.5 py-0.5 rounded">
+                              Changer
+                            </span>
+                          </div>
+                        )}
+                      </label>
                     ) : (
                       <label className="cursor-pointer w-full h-full flex flex-col items-center justify-center p-1 relative">
                         <input
@@ -1384,6 +1493,7 @@ export default function CardPreview({
         {/* DRAGGABLE RENDER FOR ACTIVE SIDE FIELDS              */}
         {/* ---------------------------------------------------- */}
         {currentSideFields.map((f, index) => {
+          if (f.key === 'doc_code') return null;
           const val = project.fields[f.key] || '';
           if (!val) return null;
 
